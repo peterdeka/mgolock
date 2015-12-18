@@ -61,7 +61,7 @@ func (lc *LockedC) GetIdLocked(id interface{}, d time.Duration, result interface
 			bson.M{"_mgolock.ets": bson.M{"$lt": now}},
 			bson.M{"_mgolock._id": lockId},
 		},
-	}).Apply(change, result)
+	}).Select(bson.M{"_mgolock": false}).Apply(change, result)
 	return err
 }
 
