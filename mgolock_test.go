@@ -26,7 +26,7 @@ func init() {
 	db.DropDatabase()
 }
 
-func TestNormalUpdate(t *testing.T) {
+func TestNoRaceGet(t *testing.T) {
 	require := require.New(t)
 	//insert mock obj
 	m := mockObj{Id: bson.NewObjectId(), Updme: "hello"}
@@ -65,7 +65,7 @@ func TestNormalUpdate(t *testing.T) {
 	require.Exactly(ld, m)
 }
 
-func TestRaceUpdate(t *testing.T) {
+func TestRaceGet(t *testing.T) {
 	require := require.New(t)
 	//insert mock obj
 	m := mockObj{Id: bson.NewObjectId(), Updme: "hello"}
@@ -79,5 +79,5 @@ func TestRaceUpdate(t *testing.T) {
 	raceLc := MakeLockedC(db.C("tests")) //get our locked collection
 	raceLd := mockObj{}
 	err = raceLc.GetIdLocked(m.Id, 2*time.Second, &raceLd)
-	require.NotNil(err)
+	require.Equal(ErrCantLock, err)
 }

@@ -7,11 +7,7 @@ import (
 	"time"
 )
 
-type CantLockErr int
-
-func (lle *CantLockErr) Error() string {
-	return "Can't lock the requested document"
-}
+var ErrCantLock = errors.New("Can't lock the requested document")
 
 //the lock struct
 type lock struct {
@@ -62,11 +58,11 @@ func (lc *LockedC) GetIdLocked(id interface{}, d time.Duration, result interface
 			bson.M{"_mgolock._id": lockId},
 		},
 	}).Select(bson.M{"_mgolock": false}).Apply(change, result)
-	return err
+	return lc.parseMgoError(id, err)
 }
 
 //updates a locked document if lock is still ours, this must be a SAFE update(with update operators),
-//otherwise the lock will be overwritten (the updatee will go ok but you'll lose the lock)
+//otherwise the lock will be overwritten (the update will go ok but you'll lose the lock)
 func (lc *LockedC) UpdateId(id interface{}, update interface{}) error {
 	if lc.c == nil {
 		return errors.New("Collection not defined")
@@ -90,7 +86,10 @@ func (lc *LockedC) Unlock(id interface{}) error {
 	}
 	err := lc.c.Update(bson.M{"_id": id, "_mgolock._id": lockId}, bson.M{"$unset": bson.M{"_mgolock": ""}})
 	if err != nil {
-		return lc.parseMgoError(id, err)
+		if err := lc.parseMgoError(id, err); err == ErrCantLock { //no problem, the doc was already unlocked or locked by someone else
+			return nil
+		}
+		return err
 	}
 	return nil
 }
@@ -104,8 +103,7 @@ func (lc *LockedC) parseMgoError(id interface{}, err error) error {
 			return e
 		}
 		if n > 0 { //yeah we lost the lock
-			var cle CantLockErr
-			return &cle
+			return ErrCantLock
 		} else { //not our fault, no document no more, clean the cached id
 			delete(lc.locks, id)
 			return err
